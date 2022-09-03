@@ -1,0 +1,114 @@
+job "certchecker" {
+    datacenters = [ [[range $index, $value := .datacenters]][[if ne $index 0]],[[end]]"[[$value]]"[[end]] ]
+    type = "service"
+    priority = [[ .priority ]]
+    update {
+        max_parallel      = 1
+        health_check      = "checks"
+        min_healthy_time  = "30s"
+        healthy_deadline  = "5m"
+        progress_deadline = "10m"
+        auto_revert       = true
+        stagger           = "30s"
+    }
+
+    [[ $blackbox_exporter_version := .blackbox_exporter_version ]]
+    [[ $blackbox_exporter_bind_port := .blackbox_exporter_bind_port ]]
+    [[ range $index, $value := .domains ]][[if ne $index 0]],[[end]]
+    group "exporter-[[ regexReplaceAll "\\W+" $value "-" ]]" {
+        count = [[.count]]
+        network {
+            port "http" {[[if $blackbox_exporter_bind_port]]static = [[$blackbox_exporter_bind_port]][[end]]}   
+        }
+        reschedule {
+            delay          = "5s"
+            delay_function = "fibonacci"
+            max_delay      = "120s"
+            unlimited      = true
+        }
+        task "exporter-[[$index]]" {
+            service {
+                tags = [ "[[ $value ]]" ]
+                name = "certchecker"
+                port = "http"
+                check {
+                    type = "tcp"
+                    port = "http"
+                    interval = "10s"
+                    timeout = "5s"
+                }
+            }
+            resources {
+                cpu = 200
+                memory = 256
+            }
+
+            # Blackbox Configuration - Application parameters
+            template {
+                data = <<__EOT__
+modules:
+  http_2xx:
+    prober: http
+  http_post_2xx:
+    prober: http
+    http:
+      method: POST
+  tcp_connect:
+    prober: tcp
+  pop3s_banner:
+    prober: tcp
+    tcp:
+      query_response:
+      - expect: "^+OK"
+      tls: true
+      tls_config:
+        insecure_skip_verify: false
+  grpc:
+    prober: grpc
+    grpc:
+      tls: true
+      preferred_ip_protocol: "ip4"
+  grpc_plain:
+    prober: grpc
+    grpc:
+      tls: false
+      service: "service1"
+  ssh_banner:
+    prober: tcp
+    tcp:
+      query_response:
+      - expect: "^SSH-2.0-"
+      - send: "SSH-2.0-blackbox-ssh-check"
+  irc_banner:
+    prober: tcp
+    tcp:
+      query_response:
+      - send: "NICK prober"
+      - send: "USER prober prober prober :prober"
+      - expect: "PING :([^ ]+)"
+        send: "PONG ${1}"
+      - expect: "^:[^ ]+ 001"
+  icmp:
+    prober: icmp
+    __EOT__
+
+               destination = "local/config.yml"
+  }
+
+            driver = "docker"
+            kill_timeout = "60s"
+            kill_signal = "SIGUSR2"
+            config {
+		    image = "prom/blackbox-exporter:v[[$blackbox_exporter_version]]"
+                ports = ["http"]
+                args    = ["--config.file", "local/config.yml", "--web.listen-address", ":${NOMAD_PORT_http}" ]
+            }
+            logs {
+                max_files     = 1
+                max_file_size = 100
+            }
+        }
+    }    
+    [[ end ]]
+}
+

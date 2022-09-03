@@ -1,0 +1,19 @@
+---
+# datacenter
+datacenters: 
+  - dc1
+  - dc2
+
+priority: 50
+
+blackbox_exporter_version: "0.22.0"
+
+# No of Instances
+instance: 1
+
+# Domain certs to monitor
+domains: 
+  - gastro.corp.io
+  - gastro-prod.io
+  - gastro-dev.io
+

@@ -4,7 +4,7 @@ The `check.nomad` job deploys an instance of `blackbox-exporter` on any nomad cl
 To deploy a job in nomad;
 ```
 export NOMAD_ADDR=https://nomad-cluster.gastro.io
-export NOMAD_TOKEN="$NOMAD_TOKEN
+export NOMAD_TOKEN="$NOMAD_TOKEN"
 ```
 ```
 nomad job plan check.nomad
